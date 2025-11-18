@@ -64,20 +64,33 @@ const Dashboard = () => {
     navigate("/");
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
     if (!user) return;
     
-    const shareUrl = `${window.location.origin}/u/${user.id}`;
+    const shareUrl = `${window.location.origin}/wishlist/${user.id}`;
+    const shareText = `Check out my food wishlist on LunchBuddy! 🍔`;
     
     if (navigator.share) {
-      navigator.share({
-        title: "Check out my LunchBuddy list!",
-        text: "Treat me to something delicious from my food wishlist",
-        url: shareUrl,
-      });
+      try {
+        await navigator.share({
+          title: "My LunchBuddy Wishlist",
+          text: shareText,
+          url: shareUrl,
+        });
+        toast.success("Shared successfully!");
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          console.error("Error sharing:", error);
+        }
+      }
     } else {
-      navigator.clipboard.writeText(shareUrl);
-      toast.success("Link copied to clipboard!");
+      try {
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Link copied to clipboard!");
+      } catch (error) {
+        console.error("Error copying to clipboard:", error);
+        toast.error("Failed to copy link");
+      }
     }
   };
 
