@@ -10,6 +10,7 @@ export default function PaymentSuccess() {
   const navigate = useNavigate();
   const [status, setStatus] = useState<"loading" | "success" | "failed">("loading");
   const reference = searchParams.get("reference");
+  const provider = searchParams.get("provider") || "paystack";
 
   useEffect(() => {
     if (reference) {
@@ -21,7 +22,8 @@ export default function PaymentSuccess() {
 
   const verifyPayment = async (ref: string) => {
     try {
-      const { data, error } = await supabase.functions.invoke("paystack-payment", {
+      const functionName = provider === "stripe" ? "stripe-payment" : "paystack-payment";
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
           action: "verify",
           reference: ref,

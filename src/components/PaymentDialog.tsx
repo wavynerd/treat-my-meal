@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Loader2, Gift } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface FoodItem {
   id: string;
@@ -25,6 +26,7 @@ export default function PaymentDialog({ item, recipientName, onClose }: PaymentD
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerNote, setBuyerNote] = useState("");
   const [loading, setLoading] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"stripe" | "paystack">("stripe");
 
   const serviceFeePercent = 5;
   const serviceFee = item.price * (serviceFeePercent / 100);
@@ -55,7 +57,8 @@ export default function PaymentDialog({ item, recipientName, onClose }: PaymentD
     try {
       setLoading(true);
 
-      const { data, error } = await supabase.functions.invoke("paystack-payment", {
+      const functionName = paymentMethod === "stripe" ? "stripe-payment" : "paystack-payment";
+      const { data, error } = await supabase.functions.invoke(functionName, {
         body: {
           action: "initialize",
           foodItemId: item.id,
@@ -66,9 +69,10 @@ export default function PaymentDialog({ item, recipientName, onClose }: PaymentD
 
       if (error) throw error;
 
-      if (data?.authorization_url) {
-        // Redirect to Paystack payment page
-        window.location.href = data.authorization_url;
+      // Redirect to payment page
+      const redirectUrl = paymentMethod === "stripe" ? data?.checkout_url : data?.authorization_url;
+      if (redirectUrl) {
+        window.location.href = redirectUrl;
       } else {
         throw new Error("Payment initialization failed");
       }
@@ -144,6 +148,27 @@ export default function PaymentDialog({ item, recipientName, onClose }: PaymentD
               onChange={(e) => setBuyerNote(e.target.value)}
               rows={3}
             />
+          </div>
+
+          {/* Payment Method Selection */}
+          <div className="space-y-3">
+            <Label>Payment Method</Label>
+            <RadioGroup value={paymentMethod} onValueChange={(value) => setPaymentMethod(value as "stripe" | "paystack")}>
+              <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-accent cursor-pointer">
+                <RadioGroupItem value="stripe" id="stripe" />
+                <Label htmlFor="stripe" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Credit/Debit Card</div>
+                  <div className="text-sm text-muted-foreground">Powered by Stripe • Worldwide</div>
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-accent cursor-pointer">
+                <RadioGroupItem value="paystack" id="paystack" />
+                <Label htmlFor="paystack" className="flex-1 cursor-pointer">
+                  <div className="font-medium">Paystack</div>
+                  <div className="text-sm text-muted-foreground">Card, Bank Transfer, USSD • Nigeria</div>
+                </Label>
+              </div>
+            </RadioGroup>
           </div>
 
           {/* Action Buttons */}
