@@ -15,6 +15,8 @@ interface FoodItem {
   price: number;
   currency: string | null;
   image_url: string | null;
+  fulfilled: boolean;
+  fulfilled_at: string | null;
 }
 
 interface Profile {
@@ -132,7 +134,12 @@ export default function PublicWishlist() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {foodItems.map((item) => (
-              <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow">
+              <Card key={item.id} className="overflow-hidden hover:shadow-lg transition-shadow relative">
+                {item.fulfilled && (
+                  <div className="absolute top-4 right-4 z-10 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium shadow-lg">
+                    ✓ Already Purchased
+                  </div>
+                )}
                 {item.image_url && (
                   <div className="aspect-video w-full overflow-hidden">
                     <img
@@ -156,9 +163,10 @@ export default function PublicWishlist() {
                   <Button
                     onClick={() => setSelectedItem(item)}
                     className="w-full"
+                    disabled={item.fulfilled}
                   >
                     <Gift className="h-4 w-4 mr-2" />
-                    Buy This Gift
+                    {item.fulfilled ? "Already Purchased" : "Buy This Gift"}
                   </Button>
                 </CardContent>
               </Card>
