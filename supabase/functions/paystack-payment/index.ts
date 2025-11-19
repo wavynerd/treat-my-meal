@@ -213,6 +213,16 @@ const handler = async (req: Request): Promise<Response> => {
             });
 
             console.log("Email notifications sent successfully");
+
+            // Mark food item as fulfilled
+            const { error: fulfillError } = await supabase
+              .from("food_items")
+              .update({ fulfilled: true, fulfilled_at: new Date().toISOString() })
+              .eq("id", txData.food_item_id);
+
+            if (fulfillError) {
+              console.error("Error marking item as fulfilled:", fulfillError);
+            }
           }
         } catch (emailError) {
           console.error("Error sending emails:", emailError);

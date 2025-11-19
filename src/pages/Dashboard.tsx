@@ -16,6 +16,8 @@ interface FoodItem {
   price: number;
   currency: string;
   image_url: string | null;
+  fulfilled: boolean;
+  fulfilled_at: string | null;
 }
 
 const Dashboard = () => {

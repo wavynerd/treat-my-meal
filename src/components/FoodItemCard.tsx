@@ -22,6 +22,8 @@ interface FoodItem {
   price: number;
   currency: string;
   image_url: string | null;
+  fulfilled: boolean;
+  fulfilled_at: string | null;
 }
 
 interface FoodItemCardProps {
@@ -53,10 +55,27 @@ export const FoodItemCard = ({ item, onDeleted }: FoodItemCardProps) => {
     }
   };
 
+  const handleMarkReceived = async () => {
+    const { error } = await supabase
+      .from("food_items")
+      .update({ fulfilled: true, fulfilled_at: new Date().toISOString() })
+      .eq("id", item.id);
+
+    if (error) {
+      toast.error("Failed to update item");
+      console.error(error);
+    } else {
+      toast.success("Item marked as received!");
+      // Trigger a refresh by calling onDeleted with empty string to signal update
+      window.location.reload();
+    }
+  };
+
   const currencySymbols: { [key: string]: string } = {
     USD: '$',
     EUR: '€',
     GBP: '£',
+    NGN: '₦',
   };
 
   return (
@@ -71,6 +90,11 @@ export const FoodItemCard = ({ item, onDeleted }: FoodItemCardProps) => {
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gradient-card">
             <span className="text-4xl">🍽️</span>
+          </div>
+        )}
+        {item.fulfilled && (
+          <div className="absolute top-2 right-2 bg-green-500 text-white px-3 py-1 rounded-full text-sm font-medium">
+            ✓ Received
           </div>
         )}
       </div>
@@ -88,9 +112,19 @@ export const FoodItemCard = ({ item, onDeleted }: FoodItemCardProps) => {
       </CardContent>
 
       <CardFooter className="gap-2 pt-0">
+        {!item.fulfilled && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="flex-1"
+            onClick={handleMarkReceived}
+          >
+            Mark as Received
+          </Button>
+        )}
         <AlertDialog>
           <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm" className="flex-1">
+            <Button variant="destructive" size="sm" className={item.fulfilled ? "flex-1" : ""}>
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
             </Button>
