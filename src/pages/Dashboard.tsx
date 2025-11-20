@@ -31,6 +31,57 @@ const Dashboard = () => {
     checkUser();
   }, []);
 
+  // Real-time notifications for new gift purchases
+  useEffect(() => {
+    if (!user) return;
+
+    const channel = supabase
+      .channel('transaction-notifications')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'transactions',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        async (payload) => {
+          const transaction = payload.new;
+          
+          // Fetch food item details for the notification
+          const { data: foodItem } = await supabase
+            .from('food_items')
+            .select('name')
+            .eq('id', transaction.food_item_id)
+            .single();
+
+          const itemName = foodItem?.name || 'a gift';
+          const currencySymbol = transaction.currency === 'USD' ? '$' : 
+                                 transaction.currency === 'EUR' ? '€' : 
+                                 transaction.currency === 'GBP' ? '£' : 
+                                 transaction.currency === 'NGN' ? '₦' : '$';
+          
+          toast.success(
+            `🎉 New Gift Received!`,
+            {
+              description: `${transaction.buyer_email} just bought you ${itemName} (${currencySymbol}${transaction.item_price})`,
+              duration: 8000,
+            }
+          );
+
+          // Refresh the food items list to show updated fulfilled status
+          if (user) {
+            fetchFoodItems(user.id);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user]);
+
   const checkUser = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     
