@@ -58,6 +58,7 @@ export type Database = {
       }
       profiles: {
         Row: {
+          bio: string | null
           country: string | null
           created_at: string | null
           currency: string | null
@@ -65,9 +66,13 @@ export type Database = {
           full_name: string | null
           id: string
           profile_image_url: string | null
+          social_links: Json | null
           updated_at: string | null
+          username: string
+          wallet_balance: number
         }
         Insert: {
+          bio?: string | null
           country?: string | null
           created_at?: string | null
           currency?: string | null
@@ -75,9 +80,13 @@ export type Database = {
           full_name?: string | null
           id: string
           profile_image_url?: string | null
+          social_links?: Json | null
           updated_at?: string | null
+          username: string
+          wallet_balance?: number
         }
         Update: {
+          bio?: string | null
           country?: string | null
           created_at?: string | null
           currency?: string | null
@@ -85,7 +94,10 @@ export type Database = {
           full_name?: string | null
           id?: string
           profile_image_url?: string | null
+          social_links?: Json | null
           updated_at?: string | null
+          username?: string
+          wallet_balance?: number
         }
         Relationships: []
       }
@@ -147,7 +159,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_username_from_email: {
+        Args: { email_address: string }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

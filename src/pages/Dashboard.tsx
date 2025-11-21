@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
 import { UtensilsCrossed, Plus, Share2, LogOut, Settings, History } from "lucide-react";
@@ -26,6 +26,8 @@ const Dashboard = () => {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [username, setUsername] = useState("");
 
   useEffect(() => {
     checkUser();
@@ -96,6 +98,20 @@ const Dashboard = () => {
 
   const fetchFoodItems = async (userId: string) => {
     setIsLoading(true);
+    
+    // Fetch profile data for wallet balance and username
+    const { data: profileData } = await supabase
+      .from("profiles")
+      .select("wallet_balance, username")
+      .eq("id", userId)
+      .single();
+
+    if (profileData) {
+      setWalletBalance(Number(profileData.wallet_balance) || 0);
+      setUsername(profileData.username || "");
+    }
+
+    // Fetch food items
     const { data, error } = await supabase
       .from("food_items")
       .select("*")
@@ -120,7 +136,9 @@ const Dashboard = () => {
   const handleShare = async () => {
     if (!user) return;
     
-    const shareUrl = `${window.location.origin}/wishlist/${user.id}`;
+    const shareUrl = username 
+      ? `${window.location.origin}/@${username}`
+      : `${window.location.origin}/wishlist/${user.id}`;
     const shareText = `Check out my food wishlist on LunchBuddy! 🍔`;
     
     if (navigator.share) {
@@ -188,13 +206,25 @@ const Dashboard = () => {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         {/* Welcome Section */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold mb-2">
-            Welcome back, {user?.email?.split('@')[0] || 'Friend'}!
-          </h2>
-          <p className="text-muted-foreground">
-            Manage your food wishlist and share it with others
-          </p>
+        <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h2 className="text-3xl font-bold mb-2">
+              Welcome back, {user?.email?.split('@')[0] || 'Friend'}!
+            </h2>
+            <p className="text-muted-foreground">
+              Manage your food wishlist and share it with others
+            </p>
+          </div>
+          <Card className="bg-gradient-hero text-white border-0 min-w-[200px]">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm opacity-90">Wallet</p>
+                  <p className="text-2xl font-bold">${walletBalance.toFixed(2)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Action Buttons */}

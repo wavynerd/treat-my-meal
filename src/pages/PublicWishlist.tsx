@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Gift, Loader2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Gift, Loader2, Twitter, Instagram, Facebook, Globe } from "lucide-react";
 import { toast } from "sonner";
 import PaymentDialog from "@/components/PaymentDialog";
 
@@ -25,26 +26,62 @@ interface Profile {
   full_name: string | null;
   profile_image_url: string | null;
   currency: string | null;
+  bio: string | null;
+  username: string | null;
+  social_links: any;
 }
 
 export default function PublicWishlist() {
-  const { userId } = useParams<{ userId: string }>();
+  const { userId, username } = useParams<{ userId?: string; username?: string }>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<FoodItem | null>(null);
 
   useEffect(() => {
-    if (userId) {
-      fetchPublicWishlist(userId);
+    if (username) {
+      fetchPublicWishlistByUsername(username);
+    } else if (userId) {
+      fetchPublicWishlistById(userId);
     }
-  }, [userId]);
+  }, [userId, username]);
 
-  const fetchPublicWishlist = async (userId: string) => {
+  const fetchPublicWishlistByUsername = async (username: string) => {
     try {
       setLoading(true);
 
-      // Fetch profile
+      // Fetch profile by username
+      const { data: profileData, error: profileError } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("username", username)
+        .single();
+
+      if (profileError) throw profileError;
+      setProfile(profileData);
+
+      // Fetch food items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from("food_items")
+        .select("*")
+        .eq("user_id", profileData.id)
+        .order("created_at", { ascending: false });
+
+      if (itemsError) throw itemsError;
+      setFoodItems(itemsData || []);
+    } catch (error: any) {
+      console.error("Error fetching wishlist:", error);
+      toast.error("Failed to load wishlist");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPublicWishlistById = async (userId: string) => {
+    try {
+      setLoading(true);
+
+      // Fetch profile by ID
       const { data: profileData, error: profileError } = await supabase
         .from("profiles")
         .select("*")
@@ -107,19 +144,62 @@ export default function PublicWishlist() {
       <div className="container mx-auto px-4 py-8">
         {/* Profile Header */}
         <Card className="mb-8">
-          <CardHeader className="flex flex-row items-center gap-4">
-            <Avatar className="h-20 w-20">
-              <AvatarImage src={profile.profile_image_url || undefined} />
-              <AvatarFallback className="text-2xl">
-                {profile.full_name?.[0]?.toUpperCase() || profile.email[0].toUpperCase()}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <CardTitle className="text-3xl">{profile.full_name || "Anonymous"}'s Wishlist</CardTitle>
-              <CardDescription className="flex items-center gap-2 mt-2">
-                <Gift className="h-4 w-4" />
-                {foodItems.length} {foodItems.length === 1 ? "item" : "items"} on the list
-              </CardDescription>
+          <CardHeader>
+            <div className="flex flex-col md:flex-row gap-6">
+              <Avatar className="h-24 w-24">
+                <AvatarImage src={profile.profile_image_url || undefined} />
+                <AvatarFallback className="text-2xl">
+                  {profile.full_name?.[0]?.toUpperCase() || profile.email[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-2">
+                  <CardTitle className="text-3xl">{profile.full_name || "Anonymous"}'s Wishlist</CardTitle>
+                  {profile.username && (
+                    <Badge variant="outline">@{profile.username}</Badge>
+                  )}
+                </div>
+                {profile.bio && (
+                  <p className="text-muted-foreground mb-3">{profile.bio}</p>
+                )}
+                <CardDescription className="flex items-center gap-2">
+                  <Gift className="h-4 w-4" />
+                  {foodItems.length} {foodItems.length === 1 ? "item" : "items"} on the list
+                </CardDescription>
+                {/* Social Links */}
+                {profile.social_links && (
+                  <div className="flex gap-3 mt-4">
+                    {profile.social_links.twitter && (
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={`https://twitter.com/${profile.social_links.twitter}`} target="_blank" rel="noopener noreferrer">
+                          <Twitter className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    {profile.social_links.instagram && (
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={`https://instagram.com/${profile.social_links.instagram}`} target="_blank" rel="noopener noreferrer">
+                          <Instagram className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    {profile.social_links.facebook && (
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={profile.social_links.facebook} target="_blank" rel="noopener noreferrer">
+                          <Facebook className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                    {profile.social_links.website && (
+                      <Button variant="outline" size="icon" asChild>
+                        <a href={profile.social_links.website} target="_blank" rel="noopener noreferrer">
+                          <Globe className="h-4 w-4" />
+                        </a>
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </CardHeader>
         </Card>

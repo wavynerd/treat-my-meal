@@ -25,6 +25,7 @@ const App = () => (
           <Route path="/auth" element={<Auth />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/@:username" element={<PublicWishlist />} />
           <Route path="/wishlist/:userId" element={<PublicWishlist />} />
           <Route path="/payment/success" element={<PaymentSuccess />} />
           <Route path="/transactions" element={<TransactionHistory />} />

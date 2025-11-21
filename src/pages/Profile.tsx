@@ -4,18 +4,31 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Upload, Wallet } from "lucide-react";
 
 const Profile = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [profile, setProfile] = useState({
     full_name: "",
     country: "",
     currency: "USD",
+    bio: "",
+    username: "",
+    profile_image_url: "",
+    wallet_balance: 0,
+    social_links: {
+      twitter: "",
+      instagram: "",
+      facebook: "",
+      website: "",
+    },
   });
 
   useEffect(() => {
@@ -36,11 +49,65 @@ const Profile = () => {
       .single();
 
     if (data) {
+      const socialLinks = data.social_links as any || {};
       setProfile({
         full_name: data.full_name || "",
         country: data.country || "",
         currency: data.currency || "USD",
+        bio: data.bio || "",
+        username: data.username || "",
+        profile_image_url: data.profile_image_url || "",
+        wallet_balance: Number(data.wallet_balance) || 0,
+        social_links: {
+          twitter: socialLinks.twitter || "",
+          instagram: socialLinks.instagram || "",
+          facebook: socialLinks.facebook || "",
+          website: socialLinks.website || "",
+        },
       });
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    setIsUploading(true);
+
+    try {
+      // Upload to storage
+      const fileExt = file.name.split('.').pop();
+      const filePath = `${user.id}/profile.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('food-images')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('food-images')
+        .getPublicUrl(filePath);
+
+      // Update profile with new image URL
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ profile_image_url: publicUrl })
+        .eq("id", user.id);
+
+      if (updateError) throw updateError;
+
+      setProfile({ ...profile, profile_image_url: publicUrl });
+      toast.success("Profile picture updated!");
+    } catch (error: any) {
+      toast.error("Failed to upload image");
+      console.error(error);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -57,6 +124,9 @@ const Profile = () => {
         full_name: profile.full_name,
         country: profile.country,
         currency: profile.currency,
+        bio: profile.bio,
+        username: profile.username,
+        social_links: profile.social_links,
       })
       .eq("id", user.id);
 
@@ -82,12 +152,83 @@ const Profile = () => {
           Back to Dashboard
         </Button>
 
+        {/* Wallet Balance Card */}
+        <Card className="mb-6 bg-gradient-hero">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between text-white">
+              <div>
+                <p className="text-sm opacity-90">Wallet Balance</p>
+                <p className="text-3xl font-bold">${profile.wallet_balance.toFixed(2)}</p>
+              </div>
+              <Wallet className="h-12 w-12 opacity-80" />
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Profile Settings</CardTitle>
+            <CardDescription>Customize your public profile and account settings</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Profile Picture */}
+              <div className="space-y-2">
+                <Label>Profile Picture</Label>
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-20 w-20">
+                    <AvatarImage src={profile.profile_image_url} />
+                    <AvatarFallback>
+                      {profile.full_name?.[0]?.toUpperCase() || "U"}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <input
+                      type="file"
+                      id="profile-image"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      disabled={isUploading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('profile-image')?.click()}
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload Photo
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+              {/* Username */}
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={profile.username}
+                  onChange={(e) => setProfile({ ...profile, username: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                  placeholder="your-username"
+                  pattern="^[a-z0-9-]+$"
+                  required
+                />
+                <p className="text-sm text-muted-foreground">
+                  Your public wishlist URL: {window.location.origin}/@{profile.username || "username"}
+                </p>
+              </div>
+
+              {/* Full Name */}
               <div className="space-y-2">
                 <Label htmlFor="full_name">Full Name</Label>
                 <Input
@@ -98,6 +239,19 @@ const Profile = () => {
                 />
               </div>
 
+              {/* Bio */}
+              <div className="space-y-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea
+                  id="bio"
+                  value={profile.bio}
+                  onChange={(e) => setProfile({ ...profile, bio: e.target.value })}
+                  placeholder="Tell people a bit about yourself..."
+                  rows={4}
+                />
+              </div>
+
+              {/* Country */}
               <div className="space-y-2">
                 <Label htmlFor="country">Country</Label>
                 <Input
@@ -108,6 +262,7 @@ const Profile = () => {
                 />
               </div>
 
+              {/* Currency */}
               <div className="space-y-2">
                 <Label htmlFor="currency">Preferred Currency</Label>
                 <Select 
@@ -121,8 +276,48 @@ const Profile = () => {
                     <SelectItem value="USD">USD ($)</SelectItem>
                     <SelectItem value="EUR">EUR (€)</SelectItem>
                     <SelectItem value="GBP">GBP (£)</SelectItem>
+                    <SelectItem value="NGN">NGN (₦)</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Social Links */}
+              <div className="space-y-4">
+                <Label>Social Links</Label>
+                <div className="space-y-3">
+                  <Input
+                    placeholder="Twitter username (without @)"
+                    value={profile.social_links.twitter}
+                    onChange={(e) => setProfile({ 
+                      ...profile, 
+                      social_links: { ...profile.social_links, twitter: e.target.value }
+                    })}
+                  />
+                  <Input
+                    placeholder="Instagram username (without @)"
+                    value={profile.social_links.instagram}
+                    onChange={(e) => setProfile({ 
+                      ...profile, 
+                      social_links: { ...profile.social_links, instagram: e.target.value }
+                    })}
+                  />
+                  <Input
+                    placeholder="Facebook profile URL"
+                    value={profile.social_links.facebook}
+                    onChange={(e) => setProfile({ 
+                      ...profile, 
+                      social_links: { ...profile.social_links, facebook: e.target.value }
+                    })}
+                  />
+                  <Input
+                    placeholder="Personal website URL"
+                    value={profile.social_links.website}
+                    onChange={(e) => setProfile({ 
+                      ...profile, 
+                      social_links: { ...profile.social_links, website: e.target.value }
+                    })}
+                  />
+                </div>
               </div>
 
               <Button 
