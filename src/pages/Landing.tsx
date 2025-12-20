@@ -18,6 +18,9 @@ const Landing = () => {
             </h1>
           </div>
           <div className="flex gap-3">
+            <Button variant="ghost" onClick={() => navigate("/discover")}>
+              Discover
+            </Button>
             <Button variant="ghost" onClick={() => navigate("/auth")}>
               Log In
             </Button>
