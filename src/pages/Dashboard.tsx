@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { UtensilsCrossed, Plus, Share2, LogOut, Settings, History } from "lucide-react";
+import { UtensilsCrossed, Plus, Share2, LogOut, Settings, History, Shield } from "lucide-react";
 import { FoodItemCard } from "@/components/FoodItemCard";
 import { AddFoodItemDialog } from "@/components/AddFoodItemDialog";
 
@@ -28,6 +28,7 @@ const Dashboard = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [username, setUsername] = useState("");
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     checkUser();
@@ -94,6 +95,18 @@ const Dashboard = () => {
 
     setUser(session.user);
     fetchFoodItems(session.user.id);
+    checkAdminRole(session.user.id);
+  };
+
+  const checkAdminRole = async (userId: string) => {
+    const { data } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('role', 'admin')
+      .maybeSingle();
+    
+    setIsAdmin(!!data);
   };
 
   const fetchFoodItems = async (userId: string) => {
@@ -189,6 +202,11 @@ const Dashboard = () => {
               </h1>
             </div>
             <div className="flex items-center gap-3">
+              {isAdmin && (
+                <Button variant="outline" size="icon" onClick={() => navigate("/admin")} title="Admin Dashboard">
+                  <Shield className="h-5 w-5 text-primary" />
+                </Button>
+              )}
               <Button variant="outline" size="icon" onClick={() => navigate("/transactions")}>
                 <History className="h-5 w-5" />
               </Button>
