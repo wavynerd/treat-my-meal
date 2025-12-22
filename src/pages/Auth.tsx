@@ -19,6 +19,8 @@ const Auth = () => {
   const [authMethod, setAuthMethod] = useState<"password" | "otp">("password");
   const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -128,6 +130,27 @@ const Auth = () => {
     } else {
       toast.success("Account created! Redirecting to your dashboard...");
       navigate("/dashboard");
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Please enter your email");
+      return;
+    }
+
+    setIsLoading(true);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/reset-password`,
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      toast.error(error.message);
+    } else {
+      setResetEmailSent(true);
+      toast.success("Check your email for the password reset link!");
     }
   };
 
@@ -301,6 +324,59 @@ const Auth = () => {
                   </>
                 )}
               </div>
+            ) : showForgotPassword ? (
+              <div className="space-y-4">
+                {!resetEmailSent ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="reset-email">Email</Label>
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <Button
+                      onClick={handleForgotPassword}
+                      className="w-full bg-gradient-hero hover:opacity-90"
+                      disabled={isLoading}
+                    >
+                      {isLoading ? "Sending..." : "Send Reset Link"}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => setShowForgotPassword(false)}
+                    >
+                      ← Back to Sign In
+                    </Button>
+                  </>
+                ) : (
+                  <div className="text-center space-y-4">
+                    <div className="p-4 bg-primary/10 rounded-lg">
+                      <p className="text-sm text-foreground">
+                        We've sent a password reset link to <strong>{email}</strong>
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Check your inbox and click the link to reset your password
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      className="w-full"
+                      onClick={() => {
+                        setShowForgotPassword(false);
+                        setResetEmailSent(false);
+                      }}
+                    >
+                      ← Back to Sign In
+                    </Button>
+                  </div>
+                )}
+              </div>
             ) : (
               <Tabs defaultValue="signin" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
@@ -322,7 +398,17 @@ const Auth = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="signin-password">Password</Label>
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="signin-password">Password</Label>
+                        <Button
+                          type="button"
+                          variant="link"
+                          className="p-0 h-auto text-xs text-muted-foreground hover:text-primary"
+                          onClick={() => setShowForgotPassword(true)}
+                        >
+                          Forgot password?
+                        </Button>
+                      </div>
                       <Input
                         id="signin-password"
                         type="password"
