@@ -5,10 +5,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { User } from "@supabase/supabase-js";
 import { toast } from "sonner";
-import { UtensilsCrossed, Plus, Share2, LogOut, Settings, History, Shield } from "lucide-react";
+import { UtensilsCrossed, Plus, Share2, LogOut, Settings, History, Shield, QrCode } from "lucide-react";
 import { FoodItemCard } from "@/components/FoodItemCard";
 import { AddFoodItemDialog } from "@/components/AddFoodItemDialog";
-
+import { ShareQRDialog } from "@/components/ShareQRDialog";
 interface FoodItem {
   id: string;
   name: string;
@@ -26,6 +26,7 @@ const Dashboard = () => {
   const [foodItems, setFoodItems] = useState<FoodItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showQRDialog, setShowQRDialog] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [username, setUsername] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -261,6 +262,10 @@ const Dashboard = () => {
             <Share2 className="h-5 w-5 mr-2" />
             Share Your List
           </Button>
+          <Button variant="outline" onClick={() => setShowQRDialog(true)}>
+            <QrCode className="h-5 w-5 mr-2" />
+            QR Code
+          </Button>
         </div>
 
         {/* Food Items Grid */}
@@ -300,6 +305,14 @@ const Dashboard = () => {
         open={showAddDialog}
         onOpenChange={setShowAddDialog}
         onItemAdded={handleItemAdded}
+      />
+
+      {/* Share QR Dialog */}
+      <ShareQRDialog
+        open={showQRDialog}
+        onOpenChange={setShowQRDialog}
+        shareUrl={username ? `${window.location.origin}/@${username}` : `${window.location.origin}/wishlist/${user?.id}`}
+        username={username}
       />
     </div>
   );
