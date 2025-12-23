@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { QRCodeSVG } from "qrcode.react";
-import { Copy, Download } from "lucide-react";
+import { Copy, Download, Twitter, Facebook, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 
 interface ShareQRDialogProps {
@@ -45,6 +45,23 @@ export const ShareQRDialog = ({ open, onOpenChange, shareUrl, username }: ShareQ
     img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
   };
 
+  const shareText = `Check out my wishlist on LunchBuddy! 🎁`;
+
+  const handleTwitterShare = () => {
+    const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
+    window.open(twitterUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleFacebookShare = () => {
+    const facebookUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    window.open(facebookUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleWhatsAppShare = () => {
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(`${shareText} ${shareUrl}`)}`;
+    window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -78,6 +95,40 @@ export const ShareQRDialog = ({ open, onOpenChange, shareUrl, username }: ShareQ
               <Download className="h-4 w-4 mr-2" />
               Download QR
             </Button>
+          </div>
+
+          {/* Social Share Buttons */}
+          <div className="w-full pt-2 border-t">
+            <p className="text-sm text-muted-foreground text-center mb-3">Share on social media</p>
+            <div className="flex gap-2 justify-center">
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleTwitterShare}
+                className="hover:bg-[#1DA1F2]/10 hover:text-[#1DA1F2] hover:border-[#1DA1F2]"
+                title="Share on Twitter"
+              >
+                <Twitter className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleFacebookShare}
+                className="hover:bg-[#1877F2]/10 hover:text-[#1877F2] hover:border-[#1877F2]"
+                title="Share on Facebook"
+              >
+                <Facebook className="h-5 w-5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={handleWhatsAppShare}
+                className="hover:bg-[#25D366]/10 hover:text-[#25D366] hover:border-[#25D366]"
+                title="Share on WhatsApp"
+              >
+                <MessageCircle className="h-5 w-5" />
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>
