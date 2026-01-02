@@ -237,7 +237,10 @@ const Dashboard = () => {
               Manage your food wishlist and share it with others
             </p>
           </div>
-          <Card className="bg-gradient-hero text-white border-0 min-w-[200px]">
+          <Card 
+            className="bg-gradient-hero text-white border-0 min-w-[200px] cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => navigate("/profile")}
+          >
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
