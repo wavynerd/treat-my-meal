@@ -20,7 +20,9 @@ import {
   MoreHorizontal,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  Wallet,
+  ArrowDownToLine
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -28,6 +30,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Textarea } from '@/components/ui/textarea';
 
 interface Profile {
   id: string;
@@ -59,11 +62,30 @@ interface Transaction {
   };
 }
 
+interface WithdrawalRequest {
+  id: string;
+  user_id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  payment_method: string | null;
+  payment_details: any;
+  admin_notes: string | null;
+  created_at: string | null;
+  processed_at: string | null;
+  profiles?: {
+    email: string;
+    username: string;
+    full_name: string | null;
+  };
+}
+
 interface Stats {
   totalUsers: number;
   totalTransactions: number;
   totalRevenue: number;
   pendingDisputes: number;
+  pendingWithdrawals: number;
 }
 
 const Admin = () => {
@@ -71,15 +93,20 @@ const Admin = () => {
   const navigate = useNavigate();
   const [users, setUsers] = useState<Profile[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [stats, setStats] = useState<Stats>({
     totalUsers: 0,
     totalTransactions: 0,
     totalRevenue: 0,
-    pendingDisputes: 0
+    pendingDisputes: 0,
+    pendingWithdrawals: 0
   });
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [withdrawalStatusFilter, setWithdrawalStatusFilter] = useState<string>('all');
   const [loadingData, setLoadingData] = useState(true);
+  const [processingWithdrawal, setProcessingWithdrawal] = useState<string | null>(null);
+  const [adminNotes, setAdminNotes] = useState<{ [key: string]: string }>({});
 
   useEffect(() => {
     if (isAdmin) {
@@ -110,16 +137,41 @@ const Admin = () => {
       if (transactionsError) throw transactionsError;
       setTransactions(transactionsData || []);
 
+      // Fetch withdrawal requests
+      const { data: withdrawalsData, error: withdrawalsError } = await supabase
+        .from('withdrawal_requests')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (withdrawalsError) throw withdrawalsError;
+      
+      // Fetch profiles for withdrawal requests
+      const userIds = [...new Set((withdrawalsData || []).map(w => w.user_id))];
+      const { data: profilesData } = await supabase
+        .from('profiles')
+        .select('id, email, username, full_name')
+        .in('id', userIds);
+      
+      const profilesMap = new Map((profilesData || []).map(p => [p.id, p]));
+      const withdrawalsWithProfiles = (withdrawalsData || []).map(w => ({
+        ...w,
+        profiles: profilesMap.get(w.user_id) || null
+      }));
+      
+      setWithdrawals(withdrawalsWithProfiles as WithdrawalRequest[]);
+
       // Calculate stats
       const allTransactions = transactionsData || [];
       const completedTransactions = allTransactions.filter(t => t.status === 'completed');
       const disputedTransactions = allTransactions.filter(t => t.status === 'disputed');
+      const pendingWithdrawals = (withdrawalsData || []).filter(w => w.status === 'pending');
 
       setStats({
         totalUsers: usersData?.length || 0,
         totalTransactions: allTransactions.length,
         totalRevenue: completedTransactions.reduce((sum, t) => sum + (t.service_fee || 0), 0),
-        pendingDisputes: disputedTransactions.length
+        pendingDisputes: disputedTransactions.length,
+        pendingWithdrawals: pendingWithdrawals.length
       });
 
     } catch (error) {
@@ -159,6 +211,61 @@ const Admin = () => {
     }
   };
 
+  const handleUpdateWithdrawalStatus = async (withdrawalId: string, newStatus: string) => {
+    setProcessingWithdrawal(withdrawalId);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { error } = await supabase
+        .from('withdrawal_requests')
+        .update({ 
+          status: newStatus,
+          processed_at: new Date().toISOString(),
+          processed_by: user?.id,
+          admin_notes: adminNotes[withdrawalId] || null
+        })
+        .eq('id', withdrawalId);
+
+      if (error) throw error;
+
+      // If completed, deduct from user's wallet
+      if (newStatus === 'completed') {
+        const withdrawal = withdrawals.find(w => w.id === withdrawalId);
+        if (withdrawal) {
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('wallet_balance')
+            .eq('id', withdrawal.user_id)
+            .single();
+          
+          if (currentProfile) {
+            await supabase
+              .from('profiles')
+              .update({ wallet_balance: Math.max(0, currentProfile.wallet_balance - withdrawal.amount) })
+              .eq('id', withdrawal.user_id);
+          }
+        }
+      }
+
+      toast({
+        title: 'Status Updated',
+        description: `Withdrawal marked as ${newStatus}`
+      });
+
+      setAdminNotes({ ...adminNotes, [withdrawalId]: '' });
+      fetchData();
+    } catch (error) {
+      console.error('Error updating withdrawal:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update withdrawal status',
+        variant: 'destructive'
+      });
+    } finally {
+      setProcessingWithdrawal(null);
+    }
+  };
+
   const getCurrencySymbol = (currency: string) => {
     switch (currency?.toUpperCase()) {
       case 'NGN': return '₦';
@@ -180,6 +287,29 @@ const Admin = () => {
         return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
     }
   };
+
+  const getWithdrawalStatusBadge = (status: string | null) => {
+    switch (status) {
+      case 'completed':
+        return <Badge className="bg-accent text-accent-foreground"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
+      case 'approved':
+        return <Badge className="bg-blue-500/10 text-blue-500 border-blue-500"><CheckCircle className="w-3 h-3 mr-1" />Approved</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
+      default:
+        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+    }
+  };
+
+  const filteredWithdrawals = withdrawals.filter(w => {
+    const profile = w.profiles as any;
+    const matchesSearch = 
+      profile?.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      profile?.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      w.id.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = withdrawalStatusFilter === 'all' || w.status === withdrawalStatusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const filteredTransactions = transactions.filter(t => {
     const matchesSearch = 
@@ -227,7 +357,7 @@ const Admin = () => {
 
       <main className="container mx-auto px-4 py-8">
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Users</CardTitle>
@@ -268,12 +398,23 @@ const Admin = () => {
               <div className="text-2xl font-bold">{stats.pendingDisputes}</div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Pending Withdrawals</CardTitle>
+              <ArrowDownToLine className="h-4 w-4 text-orange-500" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.pendingWithdrawals}</div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Tabs */}
         <Tabs defaultValue="transactions" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 max-w-md">
+          <TabsList className="grid w-full grid-cols-4 max-w-lg">
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="withdrawals">Withdrawals</TabsTrigger>
             <TabsTrigger value="users">Users</TabsTrigger>
             <TabsTrigger value="disputes">Disputes</TabsTrigger>
           </TabsList>
@@ -380,6 +521,118 @@ const Admin = () => {
                           </TableCell>
                         </TableRow>
                       ))
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Withdrawals Tab */}
+          <TabsContent value="withdrawals">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  <div>
+                    <CardTitle>Withdrawal Requests</CardTitle>
+                    <CardDescription>Review and process user withdrawal requests</CardDescription>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-9 w-[200px]"
+                      />
+                    </div>
+                    <Select value={withdrawalStatusFilter} onValueChange={setWithdrawalStatusFilter}>
+                      <SelectTrigger className="w-[130px]">
+                        <SelectValue placeholder="Status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Status</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="approved">Approved</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>User</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Method</TableHead>
+                      <TableHead>Bank Details</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredWithdrawals.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                          No withdrawal requests found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredWithdrawals.map((withdrawal) => {
+                        const profile = withdrawal.profiles as any;
+                        const details = withdrawal.payment_details as any || {};
+                        return (
+                          <TableRow key={withdrawal.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">@{profile?.username || 'Unknown'}</p>
+                                <p className="text-xs text-muted-foreground">{profile?.email}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="font-medium">
+                              {getCurrencySymbol(withdrawal.currency)}{withdrawal.amount.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="capitalize">{withdrawal.payment_method?.replace('_', ' ') || 'N/A'}</TableCell>
+                            <TableCell>
+                              <div className="text-xs">
+                                <p>{details.bank_name}</p>
+                                <p className="text-muted-foreground">{details.account_number}</p>
+                              </div>
+                            </TableCell>
+                            <TableCell>{getWithdrawalStatusBadge(withdrawal.status)}</TableCell>
+                            <TableCell>
+                              {withdrawal.created_at ? new Date(withdrawal.created_at).toLocaleDateString() : 'N/A'}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {withdrawal.status === 'pending' && (
+                                <div className="flex gap-2 justify-end">
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => handleUpdateWithdrawalStatus(withdrawal.id, 'completed')}
+                                    disabled={processingWithdrawal === withdrawal.id}
+                                  >
+                                    {processingWithdrawal === withdrawal.id ? 'Processing...' : 'Approve'}
+                                  </Button>
+                                  <Button 
+                                    size="sm" 
+                                    variant="destructive"
+                                    onClick={() => handleUpdateWithdrawalStatus(withdrawal.id, 'rejected')}
+                                    disabled={processingWithdrawal === withdrawal.id}
+                                  >
+                                    Reject
+                                  </Button>
+                                </div>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
                     )}
                   </TableBody>
                 </Table>
