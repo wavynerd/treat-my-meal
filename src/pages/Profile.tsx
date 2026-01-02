@@ -8,13 +8,25 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ArrowLeft, Loader2, Upload, Wallet } from "lucide-react";
+import { ArrowLeft, Loader2, Upload, Wallet, ArrowDownToLine, Clock, CheckCircle, XCircle } from "lucide-react";
+import { WithdrawalDialog } from "@/components/WithdrawalDialog";
+
+interface WithdrawalRequest {
+  id: string;
+  amount: number;
+  currency: string;
+  status: string;
+  created_at: string;
+}
 
 const Profile = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showWithdrawalDialog, setShowWithdrawalDialog] = useState(false);
+  const [withdrawalRequests, setWithdrawalRequests] = useState<WithdrawalRequest[]>([]);
   const [profile, setProfile] = useState({
     full_name: "",
     country: "",
@@ -33,6 +45,7 @@ const Profile = () => {
 
   useEffect(() => {
     fetchProfile();
+    fetchWithdrawalRequests();
   }, []);
 
   const fetchProfile = async () => {
@@ -65,6 +78,43 @@ const Profile = () => {
           website: socialLinks.website || "",
         },
       });
+    }
+  };
+
+  const fetchWithdrawalRequests = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data, error } = await supabase
+      .from("withdrawal_requests")
+      .select("id, amount, currency, status, created_at")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false })
+      .limit(5);
+
+    if (data) {
+      setWithdrawalRequests(data);
+    }
+  };
+
+  const getCurrencySymbol = (currency: string) => {
+    switch (currency?.toUpperCase()) {
+      case 'NGN': return '₦';
+      case 'EUR': return '€';
+      case 'GBP': return '£';
+      default: return '$';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved':
+      case 'completed':
+        return <Badge className="bg-accent text-accent-foreground"><CheckCircle className="w-3 h-3 mr-1" />Completed</Badge>;
+      case 'rejected':
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
+      default:
+        return <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
     }
   };
 
@@ -158,12 +208,46 @@ const Profile = () => {
             <div className="flex items-center justify-between text-white">
               <div>
                 <p className="text-sm opacity-90">Wallet Balance</p>
-                <p className="text-3xl font-bold">${profile.wallet_balance.toFixed(2)}</p>
+                <p className="text-3xl font-bold">{getCurrencySymbol(profile.currency)}{profile.wallet_balance.toFixed(2)}</p>
               </div>
-              <Wallet className="h-12 w-12 opacity-80" />
+              <Button 
+                variant="secondary" 
+                onClick={() => setShowWithdrawalDialog(true)}
+                disabled={profile.wallet_balance <= 0}
+                className="bg-white/20 hover:bg-white/30 text-white border-0"
+              >
+                <ArrowDownToLine className="h-4 w-4 mr-2" />
+                Withdraw
+              </Button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Recent Withdrawal Requests */}
+        {withdrawalRequests.length > 0 && (
+          <Card className="mb-6">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg">Recent Withdrawal Requests</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {withdrawalRequests.map((request) => (
+                  <div key={request.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="font-medium">
+                        {getCurrencySymbol(request.currency)}{request.amount.toFixed(2)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(request.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                    {getStatusBadge(request.status)}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>
@@ -338,6 +422,18 @@ const Profile = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Withdrawal Dialog */}
+      <WithdrawalDialog
+        open={showWithdrawalDialog}
+        onOpenChange={setShowWithdrawalDialog}
+        walletBalance={profile.wallet_balance}
+        currency={profile.currency}
+        onSuccess={() => {
+          fetchProfile();
+          fetchWithdrawalRequests();
+        }}
+      />
     </div>
   );
 };
